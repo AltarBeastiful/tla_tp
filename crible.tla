@@ -1,6 +1,6 @@
 ------------------------------- MODULE crible -------------------------------
 
-EXTENDS Naturals, TLC
+EXTENDS Naturals, TLC, Sequences
 CONSTANT K
 
 Divides(i,j) == \E k \in 0..j: j = i * k
@@ -15,10 +15,23 @@ IsPrime (x) ==
 \A i \in 1..x :
     Divides(x,i) => i = 1 \/ i = x
    
-
 (* --algorithm crible
 {
+
     variable buffer = [i \in 1..K+1 |-> 0], x=3, primes = [i \in 1..K |-> 0], iPrime = 1;
+    
+    macro receive(i, value)
+    {
+        await(buffer[i] # 0);
+        value := buffer[i];
+        buffer[i] := 0;
+    }
+
+    macro Send(m, chan) 
+    { 
+        chan := Append(chan,m);
+    } 
+    
     process (G = 0)
     {   
         l1: buffer[2] := 2;
@@ -43,7 +56,7 @@ IsPrime (x) ==
             l11: receive(self, current);
             
             
-            checkdone:if(buffer[self] = 1) {
+            checkdone:if(current = 1) {
                 continue := 0;
                 buffer[self] := 0;
                 check:await(buffer[self + 1] = 0);
@@ -71,18 +84,14 @@ IsPrime (x) ==
                 };
             };
         };
-    }  
+    } 
+    
+
     
       
 }
 
-macro receive(i, value) {
-    await(buffer[i] # 0);
-    value := buffer[i];
-    buffer[i] := 0;
-};  
 
-   macro Send(m, chan) { chan := Append(chan,m) }
 
  
 
@@ -136,12 +145,13 @@ l3(self) == /\ pc[self] = "l3"
 
 l11(self) == /\ pc[self] = "l11"
              /\ (buffer[self] # 0)
+             /\ current' = [current EXCEPT ![self] = buffer[self]]
+             /\ buffer' = [buffer EXCEPT ![self] = 0]
              /\ pc' = [pc EXCEPT ![self] = "checkdone"]
-             /\ UNCHANGED << buffer, x, primes, iPrime, current, next, 
-                             firstValue, continue >>
+             /\ UNCHANGED << x, primes, iPrime, next, firstValue, continue >>
 
 checkdone(self) == /\ pc[self] = "checkdone"
-                   /\ IF buffer[self] = 1
+                   /\ IF current[self] = 1
                          THEN /\ continue' = [continue EXCEPT ![self] = 0]
                               /\ buffer' = [buffer EXCEPT ![self] = 0]
                               /\ pc' = [pc EXCEPT ![self] = "check"]
@@ -163,7 +173,7 @@ l4(self) == /\ pc[self] = "l4"
                        /\ firstValue' = [firstValue EXCEPT ![self] = 0]
                        /\ primes' = [primes EXCEPT ![self] = self]
                        /\ Assert(IsPrime(self), 
-                                 "Failure of assertion at line 58, column 21.")
+                                 "Failure of assertion at line 75, column 21.")
                   ELSE /\ TRUE
                        /\ UNCHANGED << primes, firstValue >>
             /\ pc' = [pc EXCEPT ![self] = "l5"]
@@ -210,5 +220,6 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Sun Dec 21 11:29:26 CET 2014 by legaliz_me
+\* Last modified Fri Jan 09 08:39:46 CET 2015 by remi
+\* Last modified Sun Dec 21 11:37:51 CET 2014 by legaliz_me
 \* Created Fri Nov 21 09:10:02 CET 2014 by legaliz_me
