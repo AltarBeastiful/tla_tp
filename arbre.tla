@@ -1,5 +1,5 @@
 ------------------------------- MODULE arbre -------------------------------
-EXTENDS Naturals, TLC, Sequences
+EXTENDS Naturals, TLC, Sequences, FiniteSets
 
 CONSTANTS
     NODES, \* 5
@@ -8,14 +8,27 @@ CONSTANTS
 \*estArbre(a) == ?, il a une et une seule racine, tous les noeuds sont atteignables de la racine,   
 \*estArbreSolution(a) == ? si contient tous les noeuds
 
-EstArbre(a) ==
-   \E i \in 0..NODES-1 : a[i] = 0
+Parent(n,a) ==
+    CHOOSE y \in 1..NODES : a[n] = y
 
+EstRacine(n,a) ==
+      a[n] = 0
     
+RECURSIVE Atteignable(_,_)  
+Atteignable(n,a) == 
+ \/ EstRacine(n,a)
+ \/ Atteignable(Parent(n,a),a)
+
+EstArbre(a) == \A i \in 1..NODES : Atteignable(i,a)
+/\ \E j \in 1..NODES : \A k \in 1..NODES : /\ EstRacine(j,a) 
+                                           /\ EstRacine(k,a) => k = j
+
+\* \E i \in 1..NODES : arbre[i] = 0 /\ arbre[n] = i
+\* \/ Atteignable(arbre[n], arbre)
 
 (* --algorithm arbre
 {
-    variable chans = [i \in 1..NODES |-> <<>>], parents = [j \in 1..NODES |-> 0], start = 0;
+    variable chans = [i \in 1..NODES |-> <<>>],parents = [j \in 1..NODES |-> 0],  start = 0;
     
     macro Send(m, chan) { chan := Append(chan,m) }
 
@@ -26,11 +39,6 @@ EstArbre(a) ==
         chan := Tail (chan)
     }
     
-    \*with (i \in 1.. Len(chan)) { chan := Remove(i , chan) }
-    
-\*    macro Remove(i,seq) == [ j \in 1.. (Len(seq) - 1) \mapsto
-\*                            IF j < i THEN seq[j ] ELSE seq[j + 1]]   
-    
     process(I = 0)
     variable l = 2;
     {
@@ -40,15 +48,14 @@ EstArbre(a) ==
             await(parents[l] # 0);
             l := l + 1;
         };
-        
-        assert FALSE;
+                
+        check:assert EstArbre(parents);
     }
     
     process(Node \in 1..NODES)
-    variable parent=0, k = 0, childs = <<>>;
+    variable k = 0, childs = <<>>;
     {
-        init: Rcv(parent, chans[self]);
-        parents[self] := parent;
+        init: Rcv(parents[self], chans[self]);
         
         l2:childs := NEIGHBORGS[self];
         l3:while(Len(childs) > 0) {
@@ -56,16 +63,14 @@ EstArbre(a) ==
             childs := Tail(childs);
             k := k + 1;
         };
-        
-        
     }
 }
 
 *)
 \* BEGIN TRANSLATION
-VARIABLES chans, parents, start, pc, l, parent, k, childs
+VARIABLES chans, parents, start, pc, l, k, childs
 
-vars == << chans, parents, start, pc, l, parent, k, childs >>
+vars == << chans, parents, start, pc, l, k, childs >>
 
 ProcSet == {0} \cup (1..NODES)
 
@@ -74,9 +79,8 @@ Init == (* Global variables *)
         /\ parents = [j \in 1..NODES |-> 0]
         /\ start = 0
         (* Process I *)
-        /\ l = 1
+        /\ l = 2
         (* Process Node *)
-        /\ parent = [self \in 1..NODES |-> 0]
         /\ k = [self \in 1..NODES |-> 0]
         /\ childs = [self \in 1..NODES |-> <<>>]
         /\ pc = [self \in ProcSet |-> CASE self = 0 -> "l1"
@@ -85,46 +89,49 @@ Init == (* Global variables *)
 l1 == /\ pc[0] = "l1"
       /\ chans' = [chans EXCEPT ![1] = Append((chans[1]),0)]
       /\ pc' = [pc EXCEPT ![0] = "wait"]
-      /\ UNCHANGED << parents, start, l, parent, k, childs >>
+      /\ UNCHANGED << parents, start, l, k, childs >>
 
 wait == /\ pc[0] = "wait"
         /\ IF l <= NODES
               THEN /\ (parents[l] # 0)
                    /\ l' = l + 1
                    /\ pc' = [pc EXCEPT ![0] = "wait"]
-              ELSE /\ Assert(FALSE, 
-                             "Failure of assertion at line 44, column 9.")
-                   /\ pc' = [pc EXCEPT ![0] = "Done"]
+              ELSE /\ pc' = [pc EXCEPT ![0] = "check"]
                    /\ l' = l
-        /\ UNCHANGED << chans, parents, start, parent, k, childs >>
+        /\ UNCHANGED << chans, parents, start, k, childs >>
 
-I == l1 \/ wait
+check == /\ pc[0] = "check"
+         /\ Assert(EstArbre(parents), 
+                   "Failure of assertion at line 52, column 15.")
+         /\ pc' = [pc EXCEPT ![0] = "Done"]
+         /\ UNCHANGED << chans, parents, start, l, k, childs >>
+
+I == l1 \/ wait \/ check
 
 init(self) == /\ pc[self] = "init"
               /\ (chans[self]) # <<>>
-              /\ parent' = [parent EXCEPT ![self] = Head((chans[self]))]
+              /\ parents' = [parents EXCEPT ![self] = Head((chans[self]))]
               /\ chans' = [chans EXCEPT ![self] = Tail ((chans[self]))]
-              /\ parents' = [parents EXCEPT ![self] = parent'[self]]
               /\ pc' = [pc EXCEPT ![self] = "l2"]
               /\ UNCHANGED << start, l, k, childs >>
 
 l2(self) == /\ pc[self] = "l2"
             /\ childs' = [childs EXCEPT ![self] = NEIGHBORGS[self]]
             /\ pc' = [pc EXCEPT ![self] = "l3"]
-            /\ UNCHANGED << chans, parents, start, l, parent, k >>
+            /\ UNCHANGED << chans, parents, start, l, k >>
 
 l3(self) == /\ pc[self] = "l3"
             /\ IF Len(childs[self]) > 0
                   THEN /\ pc' = [pc EXCEPT ![self] = "sendToNeigh"]
                   ELSE /\ pc' = [pc EXCEPT ![self] = "Done"]
-            /\ UNCHANGED << chans, parents, start, l, parent, k, childs >>
+            /\ UNCHANGED << chans, parents, start, l, k, childs >>
 
 sendToNeigh(self) == /\ pc[self] = "sendToNeigh"
                      /\ chans' = [chans EXCEPT ![Head(childs[self])] = Append((chans[Head(childs[self])]),(self+1))]
                      /\ childs' = [childs EXCEPT ![self] = Tail(childs[self])]
                      /\ k' = [k EXCEPT ![self] = k[self] + 1]
                      /\ pc' = [pc EXCEPT ![self] = "l3"]
-                     /\ UNCHANGED << parents, start, l, parent >>
+                     /\ UNCHANGED << parents, start, l >>
 
 Node(self) == init(self) \/ l2(self) \/ l3(self) \/ sendToNeigh(self)
 
@@ -142,5 +149,5 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Fri Jan 16 09:00:19 CET 2015 by remi
+\* Last modified Fri Jan 23 14:12:22 CET 2015 by remi
 \* Created Fri Jan 09 09:00:07 CET 2015 by remi
