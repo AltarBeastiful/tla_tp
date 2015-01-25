@@ -5,9 +5,6 @@ CONSTANTS
     NODES, \* 5
     NEIGHBORGS \* << <<3>>, <<1,4>>, <<2,4,5>>, <<5>>, <<>> >>
     
-\*estArbre(a) == ?, il a une et une seule racine, tous les noeuds sont atteignables de la racine,   
-\*estArbreSolution(a) == ? si contient tous les noeuds
-
 Parent(n,a) ==
     CHOOSE y \in 1..NODES : a[n] = y
 
@@ -19,12 +16,9 @@ Atteignable(n,a) ==
  \/ EstRacine(n,a)
  \/ Atteignable(Parent(n,a),a)
 
-EstArbre(a) == \A i \in 1..NODES : Atteignable(i,a)
-/\ \E j \in 1..NODES : \A k \in 1..NODES : /\ EstRacine(j,a) 
+EstArbreCouvrant(a) == \A i \in 1..NODES : Atteignable(i,a) \* Vérifie que chaque chaque noeuds du graphe est atteignable depuis la racine 
+/\ \E j \in 1..NODES : \A k \in 1..NODES : /\ EstRacine(j,a) \* Il existe une et une seule racine
                                            /\ EstRacine(k,a) => k = j
-
-\* \E i \in 1..NODES : arbre[i] = 0 /\ arbre[n] = i
-\* \/ Atteignable(arbre[n], arbre)
 
 (* --algorithm arbre
 {
@@ -49,7 +43,8 @@ EstArbre(a) == \A i \in 1..NODES : Atteignable(i,a)
             l := l + 1;
         };
                 
-        check:assert EstArbre(parents);
+        check:assert EstArbreCouvrant(parents);
+\*        assert FALSE;
     }
     
     process(Node \in 1..NODES)
@@ -101,8 +96,8 @@ wait == /\ pc[0] = "wait"
         /\ UNCHANGED << chans, parents, start, k, childs >>
 
 check == /\ pc[0] = "check"
-         /\ Assert(EstArbre(parents), 
-                   "Failure of assertion at line 52, column 15.")
+         /\ Assert(EstArbreCouvrant(parents), 
+                   "Failure of assertion at line 46, column 15.")
          /\ pc' = [pc EXCEPT ![0] = "Done"]
          /\ UNCHANGED << chans, parents, start, l, k, childs >>
 
@@ -127,7 +122,7 @@ l3(self) == /\ pc[self] = "l3"
             /\ UNCHANGED << chans, parents, start, l, k, childs >>
 
 sendToNeigh(self) == /\ pc[self] = "sendToNeigh"
-                     /\ chans' = [chans EXCEPT ![Head(childs[self])] = Append((chans[Head(childs[self])]),(self+1))]
+                     /\ chans' = [chans EXCEPT ![Head(childs[self])] = Append((chans[Head(childs[self])]),self)]
                      /\ childs' = [childs EXCEPT ![self] = Tail(childs[self])]
                      /\ k' = [k EXCEPT ![self] = k[self] + 1]
                      /\ pc' = [pc EXCEPT ![self] = "l3"]
@@ -149,5 +144,5 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Fri Jan 23 14:12:22 CET 2015 by remi
+\* Last modified Sun Jan 25 14:26:26 CET 2015 by remi
 \* Created Fri Jan 09 09:00:07 CET 2015 by remi
