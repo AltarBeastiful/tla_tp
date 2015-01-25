@@ -59,7 +59,7 @@ EstArbre(a) == \A i \in 1..NODES : Atteignable(i,a)
         
         l2:childs := NEIGHBORGS[self];
         l3:while(Len(childs) > 0) {
-            sendToNeigh:Send(self+1, chans[Head(childs)]);
+            sendToNeigh:Send(self, chans[Head(childs)]);
             childs := Tail(childs);
             k := k + 1;
         };
